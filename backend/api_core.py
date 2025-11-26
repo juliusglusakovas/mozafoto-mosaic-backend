@@ -1,52 +1,69 @@
-import json
 import io
+import json
+from pathlib import Path
+
 from PIL import Image
+
 from . import mosaic_core as mc
 
 
-# -----------------------------
-# Load preset (same as Gradio)
-# -----------------------------
-with open("preset.json", "r") as f:
-    PRESET_JSON = json.load(f)
+# ------------------------------------------------------------
+# 1. Пути к пресету и тайлам
+# ------------------------------------------------------------
 
-PRESET = mc.Preset(
-    blur=PRESET_JSON["blur"],
-    unsharp_radius=PRESET_JSON["unsharp_radius"],
-    unsharp_percent=PRESET_JSON["unsharp_percent"],
-    contrast=PRESET_JSON["contrast"],
-    brightness=PRESET_JSON["brightness"],
-    gamma=PRESET_JSON["gamma"],
-)
+BASE_DIR = Path(__file__).resolve().parent
+PRESET_PATH = BASE_DIR / "preset.json"   # сюда кладёшь свой lego_mosaic_best_preset.json
+TILES_DIR = BASE_DIR / "tiles"           # здесь лежат 5 PNG тайлов RGB (...).png
 
 
-# -----------------------------
-# Load 3D LEGO tiles
-# Your mosaic_core.py loads them like this:
-# -----------------------------
-TILES = mc.load_tile_images_from_folder("tiles")
+# ------------------------------------------------------------
+# 2. Грузим пресет один раз при старте сервера
+# ------------------------------------------------------------
+
+if not PRESET_PATH.exists():
+    raise FileNotFoundError(f"Preset file not found: {PRESET_PATH}")
+
+with open(PRESET_PATH, "r", encoding="utf-8") as f:
+    PRESET = json.load(f)
 
 
-# -----------------------------
-# Full pipeline identical to Gradio
-# -----------------------------
-def generate_3d_mosaic(img_bytes: bytes, size: str):
-    img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+# ------------------------------------------------------------
+# 3. Основная функция для FastAPI
+# ------------------------------------------------------------
 
-    # map S/L size to pixels
-    target_size = 64 if size.upper() == "S" else 96
+def generate_3d_mosaic(image_bytes: bytes, size: int) -> Image.Image:
+    """
+    Главный вход для backend.main:
 
-    # this is EXACTLY what your Gradio uses:
-    pixels = mc.apply_preset_once(
-        img,
-        PRESET,
-        output_size=target_size,
-        max_per_color=1160
+    - image_bytes: байты загруженного файла (из Form / UploadFile)
+    - size: 64 или 96 (S / L)
+
+    Возвращает PIL.Image с готовой 3D-мозаикой.
+    """
+
+    # 1) читаем изображение из байтов
+    with Image.open(io.BytesIO(image_bytes)) as img:
+        img = img.convert("RGB")
+
+    # 2) строим 3D мозаику через mosaic_core.make_3d_mosaic
+    mosaic = mc.make_3d_mosaic(
+        image=img,
+        preset=PRESET,
+        size=size,
+        tiles_folder=str(TILES_DIR),
     )
 
-    # 3D rendering
-    mosaic = mc.render_3d_mosaic(pixels, TILES)
+    return mosaic
+
+
+def generate_3d_mosaic_png_bytes(image_bytes: bytes, size: int) -> bytes:
+    """
+    Удобный хелпер: сразу возвращает PNG-байты для ответа FastAPI.
+    """
+
+    img = generate_3d_mosaic(image_bytes, size)
 
     buf = io.BytesIO()
-    mosaic.save(buf, format="PNG")
-    return buf.getvalue()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return buf.read()
