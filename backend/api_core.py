@@ -1,6 +1,6 @@
 from io import BytesIO
 from PIL import Image
-import mosaic_core  # tavo tikras kodas bus čia
+from . import mosaic_core
 
 
 def generate_3d_mosaic(image_bytes: bytes, size: str):
