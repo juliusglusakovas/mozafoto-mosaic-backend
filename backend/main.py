@@ -2,7 +2,7 @@ from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import Response, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from api_core import generate_3d_mosaic
+from .api_core import generate_3d_mosaic
 
 app = FastAPI()
 
