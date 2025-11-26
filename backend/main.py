@@ -1,30 +1,45 @@
+# backend/main.py
+
 from fastapi import FastAPI, UploadFile, File, Form
-from fastapi.responses import Response, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 
-from .api_core import generate_3d_mosaic
+from .mosaic_logic import generate_3d_mosaic
 
-app = FastAPI()
+app = FastAPI(title="Mozafoto Mosaic Backend")
 
+
+# CORS, чтобы спокойно дергать из app.mozafoto.lt
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=["*"],  # можешь позже сузить до своего домена
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-@app.get("/healthz")
-def health():
-    return {"ok": True}
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
 
 
-@app.post("/mosaic")
-async def mosaic(file: UploadFile = File(...), size: str = Form("S")):
-    try:
-        image_bytes = await file.read()
-        png = generate_3d_mosaic(image_bytes, size)
-        return Response(png, media_type="image/png")
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
+@app.post(
+    "/mosaic",
+    response_class=Response,
+    responses={200: {"content": {"image/png": {}}}},
+)
+async def mosaic_endpoint(
+    file: UploadFile = File(...),
+    size: str = Form("S"),  # "S" или "L"
+):
+    """
+    Принимает фото + размер ("S" или "L"),
+    возвращает PNG с 3D LEGO мозайкой.
+    """
+    image_bytes = await file.read()
+    size = (size or "S").upper()
+    if size not in ("S", "L"):
+        size = "S"
+
+    mosaic_png = generate_3d_mosaic(image_bytes, size=size)
+    return Response(content=mosaic_png, media_type="image/png")
