@@ -5,9 +5,9 @@ from . import mosaic_core as mc
 
 
 # -----------------------------
-# Load preset (exactly like Gradio)
+# Load preset (same as Gradio)
 # -----------------------------
-with open("backend/preset.json", "r") as f:
+with open("preset.json", "r") as f:
     PRESET_JSON = json.load(f)
 
 PRESET = mc.Preset(
@@ -21,37 +21,32 @@ PRESET = mc.Preset(
 
 
 # -----------------------------
-# Load tiles (your 3D blocks)
+# Load 3D LEGO tiles
+# Your mosaic_core.py loads them like this:
 # -----------------------------
-TILES = mc.load_tile_images("backend/tiles")
+TILES = mc.load_tile_images_from_folder("tiles")
 
 
 # -----------------------------
-# API wrapper doing EXACT SAME STEPS as GRADIO
+# Full pipeline identical to Gradio
 # -----------------------------
 def generate_3d_mosaic(img_bytes: bytes, size: str):
-    # decode uploaded image
     img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
 
-    # convert S / L to pixel size
-    if size.upper() == "S":
-        target_size = 64
-    else:
-        target_size = 96
+    # map S/L size to pixels
+    target_size = 64 if size.upper() == "S" else 96
 
-    # ---- MAIN PART ----
-    # Gradio calls this EXACT function inside mosaic_core.py
-    mosaic_pixels = mc.apply_preset_once(
+    # this is EXACTLY what your Gradio uses:
+    pixels = mc.apply_preset_once(
         img,
         PRESET,
         output_size=target_size,
-        max_per_color=1160,       # your real inventory constraint
+        max_per_color=1160
     )
 
-    # convert pixel matrix to 3D mosaic
-    mosaic_3d = mc.render_3d_mosaic(mosaic_pixels, TILES)
+    # 3D rendering
+    mosaic = mc.render_3d_mosaic(pixels, TILES)
 
-    # encode PNG to bytes
     buf = io.BytesIO()
-    mosaic_3d.save(buf, format="PNG")
+    mosaic.save(buf, format="PNG")
     return buf.getvalue()
